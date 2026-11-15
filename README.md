@@ -11,6 +11,14 @@
 
 ---
 
+## 截图
+
+| 存档界面 | 栏位操作 |
+|---|---|
+| ![存档界面](screenshots/ui4_small.png) | ![改名](screenshots/ui_name_s.png) |
+
+---
+
 ## 一、安装
 
 1. 解压压缩包，把里面的东西**整个覆盖**到游戏根目录（和 `MaydayAirways.exe` 同级）：
