@@ -1,0 +1,24 @@
+# 构建产物
+/dist/
+/bin/
+/obj/
+*.dll
+*.pdb
+!screenshots/*.png
+
+# 游戏/反编译产物（体积大、且含游戏资源，禁止入库）
+/dump/
+/tools/
+/testdata/
+/interop/
+
+# 打包与视频
+/release/*.zip
+/video/
+*.mp4
+
+# 系统 / 编辑器
+.vs/
+.idea/
+Thumbs.db
+desktop.ini
