@@ -217,6 +217,12 @@ private RectTransform panelRoot;
             // 面板内坐标：以面板左下角为原点
 
 
+            // 左上角：设置入口
+            MakeButton(panelRoot, "Settings", "设置",
+                () => SettingsUI.TogglePanel(owner, host.transform),
+                new Color(0.16f, 0.20f, 0.23f, 0.95f), Mayday.UI.UITheme.Cream,
+                118f, 44f, 20f, new Vector2(52f, PanelH - 52f), new Vector2(0f, 0.5f));
+
             var title = Mayday.UI.UIF.Text(panelRoot, "Title", "存档 / 读档", 40f,
                 Mayday.UI.UITheme.Cream, TMPro.TextAlignmentOptions.Center, true, false);
             Place(title.Rect, PanelW * 0.5f, PanelH - 58f, 900f, 56f, new Vector2(0.5f, 0.5f));
@@ -297,7 +303,7 @@ private RectTransform panelRoot;
                 var infoText = Mayday.UI.UIF.Text(row.Root, "Info", SaveManager.SlotSummary(info), 20f,
                     info.Exists ? Mayday.UI.UITheme.Cream : new Color(0.52f, 0.58f, 0.62f),
                     TMPro.TextAlignmentOptions.Left, false, false);
-                Place(infoText.Rect, 68f, rowH * 0.5f, 560f, 36f, new Vector2(0f, 0.5f));
+                Place(infoText.Rect, 68f, rowH * 0.5f, 606f, 36f, new Vector2(0f, 0.5f));
 
                 int captured = slot;
                 bool canSave = hostRole && ground && SaveManager.InSession;
