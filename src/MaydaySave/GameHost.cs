@@ -8,6 +8,9 @@ namespace MaydaySave
     public class GameHost : MonoBehaviour
     {
         public static GameHost Instance;
+        internal static UnityEngine.InputSystem.Key HotkeyKey = UnityEngine.InputSystem.Key.F8;
+        private bool hotkeyLoaded;
+
         internal static float seatVerifyAt = -1f;
         internal static SaveData seatVerifyData;
 
@@ -132,6 +135,53 @@ namespace MaydaySave
                         Plugin.Logs.LogInfo($"[dev] install(false) row3: installed={pd.IsRowInstalled(3)} scene {before}->{after} rowCount={pd.RowCount} get3={(r3 != null)}");
                     }
                     catch (Exception e) { Plugin.Logs.LogError("[dev] install row2: " + e.Message); }
+                }
+
+                var confirmReq = Path.Combine(Plugin.Root, "settings_confirm.txt");
+                if (File.Exists(confirmReq))
+                {
+                    File.Delete(confirmReq);
+                    try
+                    {
+                        if (SettingsUI.Instance == null) SettingsUI.Ensure(this, transform);
+                        if (!SettingsUI.Instance.IsOpen) SettingsUI.Instance.Open();
+                        System.Threading.Thread.Sleep(120);
+                        SettingsUI.DebugConfirm();
+                        Plugin.Logs.LogInfo("[dev] confirm shown");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] confirm: " + e.Message); }
+                }
+
+                var keyReq = Path.Combine(Plugin.Root, "settings_key.txt");
+                if (File.Exists(keyReq))
+                {
+                    File.Delete(keyReq);
+                    try
+                    {
+                        SettingsUI.ApplyKey(UnityEngine.InputSystem.Key.F9);
+                        Plugin.Logs.LogInfo("[dev] key set to F9");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] key: " + e.Message); }
+                }
+
+                var resetReq = Path.Combine(Plugin.Root, "settings_reset.txt");
+                if (File.Exists(resetReq))
+                {
+                    File.Delete(resetReq);
+                    try { SettingsUI.ApplyDefaults(); } catch (Exception e) { Plugin.Logs.LogError("[dev] reset: " + e.Message); }
+                }
+
+                var cfgReq = Path.Combine(Plugin.Root, "settings_open.txt");
+                if (File.Exists(cfgReq))
+                {
+                    File.Delete(cfgReq);
+                    try
+                    {
+                        SettingsUI.Ensure(this, transform);
+                        SettingsUI.Instance.Open();
+                        Plugin.Logs.LogInfo("[dev] settings panel opened");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] settings: " + e.Message); }
                 }
 
                 var rowReq = Path.Combine(Plugin.Root, "install_row.txt");
@@ -279,25 +329,52 @@ namespace MaydaySave
             }
         }
 
+        internal static void ReloadHotkey()
+        {
+            try
+            {
+                int code = Plugin.CfgKeyCode != null ? Plugin.CfgKeyCode.Value : -1;
+                HotkeyKey = code < 0 ? UnityEngine.InputSystem.Key.F8 : (UnityEngine.InputSystem.Key)code;
+                Plugin.Logs.LogInfo("[hotkey] open key = " + HotkeyKey + " (" + code + ")");
+            }
+            catch (Exception e)
+            {
+                HotkeyKey = UnityEngine.InputSystem.Key.F8;
+                Plugin.Logs.LogWarning("[hotkey] reload: " + e.Message);
+            }
+        }
+
         private void Hotkeys()
         {
             try
             {
+                if (!hotkeyLoaded) { hotkeyLoaded = true; ReloadHotkey(); }
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (!keyboardSeen)
                 {
                     keyboardSeen = true;
-                    Plugin.Logs.LogInfo(kb == null ? "[hotkey] keyboard null" : "[hotkey] keyboard ready (F8 打开存档界面)");
+                    Plugin.Logs.LogInfo(kb == null ? "[hotkey] keyboard null" : "[hotkey] keyboard ready");
                 }
                 if (kb == null) return;
-                if (kb.f8Key.wasPressedThisFrame)
+
+                // 设置界面正在等待"按下任意键"
+                if (SettingsUI.IsCapturing)
                 {
-                    var ui = SaveUI.Ensure(this, transform);
-                    ui.Toggle();
+                    SettingsUI.PollCapture(kb);
+                    return;
                 }
-                else if (kb.escapeKey.wasPressedThisFrame && SaveUI.Instance != null && SaveUI.Instance.IsOpen)
+
+                if (kb[HotkeyKey].wasPressedThisFrame)
                 {
-                    SaveUI.Instance.Close();
+                    if (SettingsUI.Instance != null && SettingsUI.Instance.IsOpen) SettingsUI.Instance.Close();
+                    else SaveUI.Ensure(this, transform).Toggle();
+                    return;
+                }
+
+                if (kb.escapeKey.wasPressedThisFrame)
+                {
+                    if (SettingsUI.Instance != null && SettingsUI.Instance.IsOpen) { SettingsUI.Instance.Close(); return; }
+                    if (SaveUI.Instance != null && SaveUI.Instance.IsOpen) SaveUI.Instance.Close();
                 }
             }
             catch (Exception e)
