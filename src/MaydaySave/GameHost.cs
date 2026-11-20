@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using Il2CppInterop.Runtime;
+using Il2CppInterop.Runtime.InteropTypes;
 using UnityEngine;
 
 namespace MaydaySave
@@ -10,6 +12,10 @@ namespace MaydaySave
         public static GameHost Instance;
         internal static UnityEngine.InputSystem.Key HotkeyKey = UnityEngine.InputSystem.Key.F8;
         private bool hotkeyLoaded;
+
+        private int alarmForceStall;
+        private int alarmProbeFrames;
+        private int alarmProbeTotal;
 
         internal static float seatVerifyAt = -1f;
         internal static SaveData seatVerifyData;
@@ -33,6 +39,33 @@ namespace MaydaySave
                 {
                     try { SaveManager.EnsureSeatRows(svd); } catch (Exception ex) { Plugin.Logs.LogWarning("[load] seats verify: " + ex.Message); }
                 }
+            }
+
+            if (alarmForceStall > 0)
+            {
+                alarmForceStall--;
+                try
+                {
+                    var pf3 = Mayday.Flight.PlaneFlight.Instance;
+                    if (pf3 != null)
+                    {
+                        var sim3 = pf3.sim;
+                        sim3.OnGround = false;
+                        sim3.WeightOnWheels = 0f;
+                        sim3.Speed = 20f;
+                        sim3.Alpha = 0.55f;
+                        sim3.Agl = 400f;
+                    }
+                    if (alarmForceStall == 100 || alarmForceStall == 40 || alarmForceStall == 5)
+                        SaveManager.CaptureAlarmProbe("STALL-" + alarmForceStall);
+                }
+                catch (Exception e) { Plugin.Logs.LogWarning("[dev] force stall: " + e.Message); }
+            }
+
+            if (alarmProbeFrames > 0)
+            {
+                alarmProbeFrames--;
+                try { AlarmProbeStep(alarmProbeFrames); } catch (Exception e) { Plugin.Logs.LogWarning("[probe] " + e.Message); }
             }
 
             t += Time.deltaTime;
@@ -150,6 +183,98 @@ namespace MaydaySave
                         Plugin.Logs.LogInfo("[dev] confirm shown");
                     }
                     catch (Exception e) { Plugin.Logs.LogError("[dev] confirm: " + e.Message); }
+                }
+
+                var galleyReq = Path.Combine(Plugin.Root, "galley_fire.txt");
+                if (File.Exists(galleyReq))
+                {
+                    File.Delete(galleyReq);
+                    try
+                    {
+                        var g = Mayday.Service.GalleySystem.Instance;
+                        if (g != null)
+                        {
+                            var ov = g.NetworkOven;
+                            ov.on = true;
+                            ov.fire = true;
+                            ov.doorPulseUntil = Mayday.World.WorldAuthority.Time + 9999.0;
+                            g.NetworkOven = ov;
+                            Plugin.Logs.LogInfo("[dev] oven forced on+fire, OverloadUntil=" + g.NetworkOverloadUntil.ToString("F0"));
+                        }
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] galley: " + e.Message); }
+                }
+
+                var futureReq = Path.Combine(Plugin.Root, "alarm_future.txt");
+                if (File.Exists(futureReq))
+                {
+                    File.Delete(futureReq);
+                    try
+                    {
+                        double now = Mayday.World.WorldAuthority.Time;
+                        var pfF = Mayday.Flight.PlaneFlight.Instance;
+                        if (pfF != null) pfF.NetworkpaReadyAt = now + 5000.0;
+                        var pa = Mayday.Flight.PASystem.Instance;
+                        if (pa != null) { pa.NetworklockoutUntil = now + 5000.0; pa.NetworkliveAt = now + 5000.0; }
+                        var paxAll = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Mayday.Passengers.Passenger>());
+                        if (paxAll != null && paxAll.Length > 0) { var p0 = paxAll[0].Cast<Mayday.Passengers.Passenger>(); p0.NetworkRequestDeadline = now + 5000.0; }
+                        Plugin.Logs.LogInfo($"[dev] injected future timestamps (now={now:F0})");
+                        SaveManager.CaptureAlarmProbe("FUTURE");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] future: " + e.Message); }
+                }
+
+                var stallReq = Path.Combine(Plugin.Root, "alarm_stall.txt");
+                if (File.Exists(stallReq))
+                {
+                    File.Delete(stallReq);
+                    try
+                    {
+                        alarmForceStall = 150;
+                        SaveManager.CaptureAlarmProbe("STALL-BEFORE");
+                        Plugin.Logs.LogInfo("[dev] forced stall test armed (150 frames)");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] stall: " + e.Message); }
+                }
+
+                var airReq = Path.Combine(Plugin.Root, "alarm_air.txt");
+                if (File.Exists(airReq))
+                {
+                    File.Delete(airReq);
+                    try
+                    {
+                        var pf2 = Mayday.Flight.PlaneFlight.Instance;
+                        if (pf2 != null)
+                        {
+                            var sim2 = pf2.sim;
+                            var air = sim2.Pos + new Vector3(0f, 320f, 0f);
+                            pf2.ServerTeleport(air, sim2.Heading);
+                            Plugin.Logs.LogInfo("[dev] plane teleported to " + air + " for stall test");
+                            SaveManager.CaptureAlarmProbe("AIR-BEFORE");
+                        }
+                        alarmProbeFrames = 90;
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] air: " + e.Message); }
+                }
+
+                var probeReq = Path.Combine(Plugin.Root, "alarm_probe.txt");
+                if (File.Exists(probeReq))
+                {
+                    File.Delete(probeReq);
+                    try
+                    {
+                        SaveManager.CaptureAlarmProbe("BEFORE");
+                        var pf2 = Mayday.Flight.PlaneFlight.Instance;
+                        if (pf2 != null)
+                        {
+                            var sim2 = pf2.sim;
+                            sim2.Stalling = true;
+                            sim2.StallWarning = true;
+                        }
+                        alarmProbeFrames = 40;
+                        Plugin.Logs.LogInfo("[probe] armed (40 frames)");
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[probe] arm: " + e.Message); }
                 }
 
                 var keyReq = Path.Combine(Plugin.Root, "settings_key.txt");
@@ -327,6 +452,31 @@ namespace MaydaySave
                     try { if (SaveUI.Instance != null) SaveUI.Instance.Rebuild(); } catch { }
                 }
             }
+        }
+
+        private void AlarmProbeStep(int left)
+        {
+            try
+            {
+                var pf = Mayday.Flight.PlaneFlight.Instance;
+                if (pf != null && left > 24)
+                {
+                    var sim = pf.sim;
+                    sim.Stalling = true;
+                    sim.StallWarning = true;
+                }
+                if (left == 20) SaveManager.CaptureAlarmProbe("DURING");
+                if (left == 1)
+                {
+                    if (pf != null)
+                    {
+                        var sim = pf.sim;
+                        sim.Stalling = false;
+                        sim.StallWarning = false;
+                    }
+                }
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[probe] step: " + e.Message); }
         }
 
         internal static void ReloadHotkey()
