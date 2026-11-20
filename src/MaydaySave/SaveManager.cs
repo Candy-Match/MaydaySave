@@ -1812,7 +1812,10 @@ namespace MaydaySave
                             if (!(nm.EndsWith("At", StringComparison.Ordinal)
                                || nm.EndsWith("Until", StringComparison.Ordinal)
                                || nm.EndsWith("Deadline", StringComparison.Ordinal)
-                               || nm.EndsWith("DeathTime", StringComparison.Ordinal))) continue;
+                               || nm.EndsWith("DeathTime", StringComparison.Ordinal)
+                               || nm.EndsWith("Start", StringComparison.Ordinal)
+                               || nm.EndsWith("Stamp", StringComparison.Ordinal)
+                               || nm.EndsWith("EndTime", StringComparison.Ordinal))) continue;
                             try
                             {
                                 object v = pr.GetValue(obj);
@@ -1938,22 +1941,60 @@ namespace MaydaySave
                 catch (Exception e4) { Plugin.Logs.LogWarning("[load] micro clean: " + e4.Message); }
 
                 // 厨房过载计时：钳到当前时间（等价于"已结束"）
+                double galleyNow = 0;
+                try { galleyNow = Mayday.World.WorldAuthority.Time; } catch { }
                 try
                 {
-                    double now = Mayday.World.WorldAuthority.Time;
-                    if (galley.NetworkOverloadUntil > now + 1.0) galley.NetworkOverloadUntil = now;
+                    if (galleyNow > 0 && galley.NetworkOverloadUntil > galleyNow + 1.0) galley.NetworkOverloadUntil = galleyNow;
                 }
                 catch { }
+
+                // 咖啡机：CoffeeState.endTime 同样是绝对时间，读档后会一直"正在煮"/卡住
+                int drinks = 0;
+                if (galleyNow > 0)
+                {
+                    try
+                    {
+                        var cf = galley.NetworkCoffee;
+                        if (cf.endTime > galleyNow + 1.0 || cf.phase != 0 || cf.jammed)
+                        {
+                            cf.phase = 0;
+                            cf.endTime = 0.0;
+                            cf.duration = 0f;
+                            cf.jammed = false;
+                            cf.whacks = 0;
+                            galley.NetworkCoffee = cf;
+                            drinks++;
+                        }
+                    }
+                    catch (Exception e5) { Plugin.Logs.LogWarning("[load] coffee clean: " + e5.Message); }
+
+                    // 热水机（泡茶）：PourState.endTime 同理
+                    try
+                    {
+                        var po = galley.NetworkKettle;
+                        if (po.endTime > galleyNow + 1.0 || po.phase != 0)
+                        {
+                            po.phase = 0;
+                            po.endTime = 0.0;
+                            po.duration = 0f;
+                            galley.NetworkKettle = po;
+                            drinks++;
+                        }
+                    }
+                    catch (Exception e6) { Plugin.Logs.LogWarning("[load] kettle clean: " + e6.Message); }
+                }
 
                 string after = "";
                 try
                 {
                     var ov = galley.Oven;
-                    after = "oven(on=" + ov.on + ",fire=" + ov.fire + ")";
+                    var cfv = galley.Coffee;
+                    after = "oven(on=" + ov.on + ",fire=" + ov.fire + ") coffee(phase=" + cfv.phase + ",jam=" + cfv.jammed + ")";
                 }
                 catch { }
 
-                Plugin.Logs.LogInfo($"[load] galley sanitized: stations={reset} {before} -> {after}");
+                Plugin.Logs.LogInfo($"[load] galley sanitized: stations={reset} drinks={drinks} {before} -> {after}");
             }
             catch (Exception e) { Plugin.Logs.LogWarning("[load] galley: " + e.Message); }
         }
