@@ -7,7 +7,7 @@ using BepInEx.Unity.IL2CPP;
 
 namespace MaydaySave
 {
-    [BepInPlugin("com.dsh.maydaysave", "Mayday Save", "5.1.0")]
+    [BepInPlugin("com.dsh.maydaysave", "Mayday Save", "5.2.0")]
     public class Plugin : BasePlugin
     {
         internal static ManualLogSource Logs;
@@ -18,7 +18,7 @@ namespace MaydaySave
         internal static ConfigEntry<bool> CfgBagFreeMode;
         internal static ConfigEntry<bool> CfgPartialBags;
         internal static ConfigEntry<int> CfgKeyCode;
-        internal const string VersionText = "5.1.0";
+        internal const string VersionText = "5.2.0";
         private static bool notifyBroken;
 
         public override void Load()
@@ -39,7 +39,7 @@ namespace MaydaySave
             CfgKeyCode = Config.Bind("General", "KeyCode", -1,
                 "-1 = F8；其它值为 UnityEngine.InputSystem.Key 的整数（可在设置界面里改，不用手填）");
 
-            Logs.LogInfo($"MaydaySave v5.1.0 loaded. data={Root}");
+            Logs.LogInfo($"MaydaySave v5.2.0 loaded. data={Root}");
             Logs.LogInfo("热键 F8 打开存档界面；右下角也有“存档”按钮。");
             var host = AddComponent<GameHost>();
             GameHost.Instance = host;
