@@ -151,6 +151,7 @@ namespace MaydaySave
             var gs = GS;
             d.Set("gs.phase", (byte)gs.Phase);
             d.Set("gs.seed", gs.RunSeed);
+            try { d.Set("wt.saved", Mayday.World.WorldAuthority.Time); } catch { }
             d.Set("gs.leg", gs.Leg);
             d.Set("gs.money", gs.Money);
             d.Set("gs.debt", gs.Debt);
@@ -1626,6 +1627,337 @@ namespace MaydaySave
             catch (Exception e) { Plugin.Logs.LogWarning("[load] seats verify: " + e.Message); }
         }
 
+        /// <summary>诊断：输出与"警报/音频"相关的运行状态。</summary>
+        public static void CaptureAlarmProbe(string tag)
+        {
+            try
+            {
+                var sb = new StringBuilder();
+                sb.Append("[probe ").Append(tag).Append("] ");
+
+                var panels = UnityEngine.Object.FindObjectsOfType<Mayday.Flight.WarningPanel>();
+                sb.Append("panels=").Append(panels == null ? -1 : panels.Length);
+                if (panels != null && panels.Length > 0)
+                {
+                    var pnl = panels[0];
+                    sb.Append(" audioSrc=").Append(pnl.audioSource == null ? "null" : "ok");
+                    try { sb.Append(" enabled=").Append(pnl.enabled).Append(" active=").Append(pnl.gameObject.activeInHierarchy); } catch { }
+                    try { sb.Append(" stallLoop=").Append(pnl.stallLoop); } catch { }
+                    // 直接调用 WarningPanel.Aural，测试"警报链路"是否还能起循环
+                    try
+                    {
+                        var pfA = Mayday.Flight.PlaneFlight.Instance;
+                        var m = pnl.GetType().GetMethod("Aural",
+                            System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                        if (m != null && pfA != null)
+                        {
+                            m.Invoke(pnl, new object[] { pfA, true, true });
+                            System.Threading.Thread.Sleep(30);
+                            try { sb.Append(" auralLoop=").Append(pnl.stallLoop); } catch { }
+                            m.Invoke(pnl, new object[] { pfA, false, true });
+                            System.Threading.Thread.Sleep(10);
+                            try { sb.Append(" auralAfter=").Append(pnl.stallLoop); } catch { }
+                            // 无电时是否还会起循环（判断 power 是不是总闸）
+                            m.Invoke(pnl, new object[] { pfA, true, false });
+                            System.Threading.Thread.Sleep(20);
+                            try { sb.Append(" auralNoPower=").Append(pnl.stallLoop); } catch { }
+                            m.Invoke(pnl, new object[] { pfA, false, true });
+                            System.Threading.Thread.Sleep(10);
+                        }
+                        else sb.Append(" auralMethod=").Append(m == null ? "null" : "ok");
+                    }
+                    catch (Exception e6) { sb.Append(" auralErr=").Append(e6.GetType().Name).Append(':').Append(e6.Message); }
+
+                    // 音频系统往返测试（音量 0，不出声）
+                    try
+                    {
+                        var tr = pnl.audioSource != null ? pnl.audioSource : pnl.transform;
+                        int h = Mayday.Sfx.StartLoop("smoke_alarm", tr, 0f, 1f);
+                        sb.Append(" loopHandle=").Append(h);
+                        try { Mayday.Sfx.SetLoop(h, 0f, 1f); } catch (Exception e4) { sb.Append(" setLoopErr=").Append(e4.Message); }
+                        Mayday.Sfx.StopLoop(ref h);
+                        sb.Append(" afterStop=").Append(h);
+                    }
+                    catch (Exception e5) { sb.Append(" sfxLoopErr=").Append(e5.Message); }
+                }
+
+                try
+                {
+                    var pf = Mayday.Flight.PlaneFlight.Instance;
+                    if (pf != null)
+                    {
+                        var sim = pf.sim;
+                        sb.Append(" | sim: onGround=").Append(sim.OnGround)
+                          .Append(" stall=").Append(sim.Stalling)
+                          .Append(" stallWarn=").Append(sim.StallWarning)
+                          .Append(" speed=").Append(sim.Speed.ToString("F0"));
+                        sb.Append(" | ap: modes=").Append(pf.apModes).Append(" fault=").Append(pf.apFault)
+                          .Append(" crashed=").Append(pf.crashed).Append(" gearJam=").Append(pf.gearJammed)
+                          .Append(" paReadyAt=").Append(pf.paReadyAt.ToString("F1"))
+                          .Append(" apModes=").Append(pf.apModes);
+                        try { sb.Append(" wtime=").Append(Mayday.World.WorldAuthority.Time.ToString("F1")); } catch { }
+                        try
+                        {
+                            sb.Append(" | plane: enabled=").Append(pf.enabled)
+                              .Append(" active=").Append(pf.gameObject.activeInHierarchy)
+                              .Append(" cockpitAudio=").Append(pf.cockpitAudio == null ? "null" : "ok")
+                              .Append(" pos=").Append(pf.transform.position.ToString("F0"));
+                        }
+                        catch (Exception e7) { sb.Append(" planeX:").Append(e7.Message); }
+                    }
+                }
+                catch (Exception e1) { sb.Append(" plane:").Append(e1.Message); }
+
+                try
+                {
+                    var el = UnityEngine.Object.FindObjectsOfType<Mayday.Systems.ElectricalSystem>();
+                    if (el != null && el.Length > 0)
+                    {
+                        var e = el[0];
+                        sb.Append(" | elec: master=").Append(e.master).Append(" genL=").Append(e.genL)
+                          .Append(" genR=").Append(e.genR).Append(" batt=").Append(e.battery.ToString("F0"))
+                          .Append(" breakers=").Append(e.breakers).Append(" fuses=").Append(e.fusesBlown)
+                          .Append(" tripped=").Append(e.trippedMask);
+                    }
+                }
+                catch (Exception e2) { sb.Append(" elec:").Append(e2.Message); }
+
+                try
+                {
+                    sb.Append(" | buses=");
+                    for (int b = 0; b < 8; b++)
+                    {
+                        var id = (Mayday.PowerBusId)b;
+                        sb.Append(Mayday.PowerBus.IsPowered(id) ? "1" : "0");
+                    }
+                }
+                catch (Exception e8) { sb.Append(" busesErr:").Append(e8.Message); }
+
+                try
+                {
+                    sb.Append(" | sfxImpl=").Append(Mayday.Sfx.Impl == null ? "null" : Mayday.Sfx.Impl.GetType().Name);
+                }
+                catch (Exception e3) { sb.Append(" sfx:").Append(e3.Message); }
+
+                Plugin.Logs.LogInfo(sb.ToString());
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[probe] " + e.Message); }
+        }
+
+        /// <summary>
+        /// 读档后修正"绝对世界时间"字段：新会话的 WorldAuthority.Time 从 0 重新计时，
+        /// 存档里那些 *At / *Until / *Deadline 会落到未来，把提示音、PA、眩晕等状态锁死。
+        /// 这里把所有"明显在未来"的时间戳拉回到当前时间。
+        /// </summary>
+        public static void ClampFutureTimestamps(SaveData d)
+        {
+            int clamped = 0;
+            try
+            {
+                double now = 0;
+                try { now = Mayday.World.WorldAuthority.Time; } catch { }
+                // 有些报警/PA 的冷却用的是 Unity 时间，这里取两者的较小值作为"现在"，避免把合法值误钳
+                try
+                {
+                    double ut = UnityEngine.Time.time;
+                    if (ut > 0 && (now <= 0 || ut < now)) now = ut;
+                }
+                catch { }
+                if (now <= 0) return;
+                double saved = d.Has("wt.saved") ? d.Double("wt.saved") : now;
+
+                var types = new Il2CppSystem.Type[]
+                {
+                    Il2CppType.Of<Mayday.Flight.PlaneFlight>(),
+                    Il2CppType.Of<Mayday.Flight.PASystem>(),
+                    Il2CppType.Of<Mayday.GameState>(),
+                    Il2CppType.Of<Mayday.PlayerNet>(),
+                    Il2CppType.Of<Mayday.Passengers.Passenger>(),
+                    Il2CppType.Of<Mayday.Passengers.SeatRow>(),
+                    Il2CppType.Of<Mayday.Passengers.PassengerDirector>(),
+                    Il2CppType.Of<Mayday.Airport.BagDrop>(),
+                    Il2CppType.Of<Mayday.Service.ConsumeNet>(),
+                    Il2CppType.Of<Mayday.Service.GalleySystem>(),
+                    Il2CppType.Of<Mayday.Service.LavSystem>(),
+                    Il2CppType.Of<Mayday.Service.TrashBin>(),
+                    Il2CppType.Of<Mayday.Service.Mess>(),
+                    Il2CppType.Of<Mayday.Systems.CapedBoss>(),
+                    Il2CppType.Of<Mayday.Systems.ElectricalSystem>(),
+                    Il2CppType.Of<Mayday.Systems.FireNode>(),
+                    Il2CppType.Of<Mayday.Systems.FailureDirector>(),
+                    Il2CppType.Of<Mayday.Airport.AirStairs>(),
+                    Il2CppType.Of<Mayday.Airport.DispatchBoard>(),
+                };
+
+                var sb = new StringBuilder();
+                for (int ti = 0; ti < types.Length; ti++)
+                {
+                    UnityEngine.Object[] arr = null;
+                    try { arr = UnityEngine.Object.FindObjectsOfType(types[ti]); } catch { }
+                    if (arr == null) continue;
+                    for (int oi = 0; oi < arr.Length; oi++)
+                    {
+                        var obj = arr[oi];
+                        if (obj == null) continue;
+                        System.Reflection.PropertyInfo[] props;
+                        try { props = obj.GetType().GetProperties(); } catch { continue; }
+                        for (int pi = 0; pi < props.Length; pi++)
+                        {
+                            var pr = props[pi];
+                            if (!pr.CanRead || !pr.CanWrite) continue;
+                            string nm = pr.Name;
+                            if (nm == null || !nm.StartsWith("Network", StringComparison.Ordinal)) continue;
+                            var pt = pr.PropertyType;
+                            if (pt != typeof(double) && pt != typeof(float)) continue;
+                            if (!(nm.EndsWith("At", StringComparison.Ordinal)
+                               || nm.EndsWith("Until", StringComparison.Ordinal)
+                               || nm.EndsWith("Deadline", StringComparison.Ordinal)
+                               || nm.EndsWith("DeathTime", StringComparison.Ordinal))) continue;
+                            try
+                            {
+                                object v = pr.GetValue(obj);
+                                double val = pt == typeof(double) ? (double)v : (float)v;
+                                if (val > now + 1.0)
+                                {
+                                    object nv = pt == typeof(double) ? (object)now : (object)(float)now;
+                                    pr.SetValue(obj, nv);
+                                    clamped++;
+                                    if (sb.Length < 220) sb.Append(nm).Append("(").Append(val.ToString("F0")).Append("->").Append(now.ToString("F0")).Append(") ");
+                                }
+                            }
+                            catch { }
+                        }
+                    }
+                }
+                Plugin.Logs.LogInfo($"[load] timestamps: now={now:F0} saved={saved:F0} clamped={clamped} {sb}");
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[load] clamp: " + e.Message); }
+        }
+
+        /// <summary>读档后重置警报系统的瞬时状态，避免上一局残留把提示音"哑掉"。</summary>
+        public static void RearmAlarms()
+        {
+            int panels = 0, timers = 0;
+            try
+            {
+                var arr = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Mayday.Flight.WarningPanel>());
+                if (arr != null)
+                {
+                    for (int i = 0; i < arr.Length; i++)
+                    {
+                        var pnl = arr[i].Cast<Mayday.Flight.WarningPanel>();
+                        if (pnl == null) continue;
+                        panels++;
+                        try
+                        {
+                            var m = pnl.GetType().GetMethod("OnDisable",
+                                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Public);
+                            if (m != null) m.Invoke(pnl, null);
+                        }
+                        catch { }
+                        try { pnl.stallLoop = 0; } catch { }
+                        try { pnl.enabled = true; } catch { }
+                    }
+                }
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[load] rearm panel: " + e.Message); }
+
+            try
+            {
+                var pf = Mayday.Flight.PlaneFlight.Instance;
+                if (pf != null)
+                {
+                    string[] names = { "gpwsBeepTimer", "unattendedAlarm", "reverseBeepT", "iceStallBeepIn" };
+                    for (int i = 0; i < names.Length; i++)
+                    {
+                        try
+                        {
+                            var pr = pf.GetType().GetProperty(names[i]);
+                            if (pr != null && pr.CanWrite) { pr.SetValue(pf, 0f); timers++; }
+                        }
+                        catch { }
+                    }
+                    string[] flags = { "apSlowWarnArmed", "iceWarned", "iceHeavyWarned" };
+                    for (int i = 0; i < flags.Length; i++)
+                    {
+                        try
+                        {
+                            var pr = pf.GetType().GetProperty(flags[i]);
+                            if (pr != null && pr.CanWrite) { pr.SetValue(pf, false); timers++; }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch (Exception e2) { Plugin.Logs.LogWarning("[load] rearm timers: " + e2.Message); }
+
+            Plugin.Logs.LogInfo($"[load] alarms rearmed: panels={panels} timers={timers}");
+        }
+
+        /// <summary>
+        /// 读档后清理厨房设备状态：烤箱/微波炉的 CookerState 里存的是绝对时间与 on/fire 布尔，
+        /// 读档后可能出现"烤箱一直加热、亮得像太阳、厨房持续用电过多"且无法修复。
+        /// 这里直接对这些工位调用游戏自己的 ServerReset()。
+        /// </summary>
+        public static void SanitizeGalley()
+        {
+            int reset = 0;
+            try
+            {
+                var galley = Mayday.Service.GalleySystem.Instance;
+                if (galley == null) { Plugin.Logs.LogInfo("[load] galley: none"); return; }
+
+                string before = "";
+                try
+                {
+                    var ov = galley.Oven;
+                    before = "oven(on=" + ov.on + ",fire=" + ov.fire + ",door=" + ov.doorOpen + ",pulse=" + ov.doorPulseUntil.ToString("F0") + ")";
+                }
+                catch { }
+
+                try { if (galley.oven != null) { galley.oven.ServerReset(); reset++; } } catch (Exception e1) { Plugin.Logs.LogWarning("[load] oven reset: " + e1.Message); }
+                try { if (galley.microwave != null) { galley.microwave.ServerReset(); reset++; } } catch (Exception e2) { Plugin.Logs.LogWarning("[load] micro reset: " + e2.Message); }
+
+                // 再强制写入"关闭 + 门关 + 无脉冲 + 无火"的干净状态：
+                // CookerState.doorPulseUntil 是绝对时间，读档后会落在未来，把门/加热逻辑卡住，
+                // 表现就是"烤箱一直亮、厨房持续过载、怎么修都修不好"。
+                try
+                {
+                    var ov0 = galley.NetworkOven;
+                    ov0.on = false; ov0.doorOpen = false; ov0.doorPulseUntil = 0.0; ov0.fire = false;
+                    galley.NetworkOven = ov0;
+                }
+                catch (Exception e3) { Plugin.Logs.LogWarning("[load] oven clean: " + e3.Message); }
+
+                try
+                {
+                    var mi0 = galley.NetworkMicro;
+                    mi0.on = false; mi0.doorOpen = false; mi0.doorPulseUntil = 0.0; mi0.fire = false;
+                    galley.NetworkMicro = mi0;
+                }
+                catch (Exception e4) { Plugin.Logs.LogWarning("[load] micro clean: " + e4.Message); }
+
+                // 厨房过载计时：钳到当前时间（等价于"已结束"）
+                try
+                {
+                    double now = Mayday.World.WorldAuthority.Time;
+                    if (galley.NetworkOverloadUntil > now + 1.0) galley.NetworkOverloadUntil = now;
+                }
+                catch { }
+
+                string after = "";
+                try
+                {
+                    var ov = galley.Oven;
+                    after = "oven(on=" + ov.on + ",fire=" + ov.fire + ")";
+                }
+                catch { }
+
+                Plugin.Logs.LogInfo($"[load] galley sanitized: stations={reset} {before} -> {after}");
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[load] galley: " + e.Message); }
+        }
+
         public static void ClearPassengers()
         {
             try
@@ -2342,6 +2674,9 @@ namespace MaydaySave
             Snapshot.RestorePlayers(d);
             RestoreFuel(d);
             RestoreHull(d);
+            ClampFutureTimestamps(d);
+            RearmAlarms();
+            SanitizeGalley();
         }
 
         public static void ApplyExtras(SaveData d)
