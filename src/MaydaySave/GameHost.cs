@@ -185,6 +185,34 @@ namespace MaydaySave
                     catch (Exception e) { Plugin.Logs.LogError("[dev] confirm: " + e.Message); }
                 }
 
+                var coffeeReq = Path.Combine(Plugin.Root, "galley_coffee.txt");
+                if (File.Exists(coffeeReq))
+                {
+                    File.Delete(coffeeReq);
+                    try
+                    {
+                        var g2 = Mayday.Service.GalleySystem.Instance;
+                        if (g2 != null)
+                        {
+                            double n2 = Mayday.World.WorldAuthority.Time;
+                            var cf = g2.NetworkCoffee;
+                            cf.phase = 2;
+                            cf.endTime = n2 + 9999.0;
+                            cf.duration = 12f;
+                            cf.jammed = true;
+                            cf.whacks = 3;
+                            g2.NetworkCoffee = cf;
+                            var po = g2.NetworkKettle;
+                            po.phase = 1;
+                            po.endTime = n2 + 9999.0;
+                            po.duration = 8f;
+                            g2.NetworkKettle = po;
+                            Plugin.Logs.LogInfo($"[dev] coffee/kettle forced busy (now={n2:F0}, coffeeEnd={cf.endTime:F0})");
+                        }
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] coffee: " + e.Message); }
+                }
+
                 var galleyReq = Path.Combine(Plugin.Root, "galley_fire.txt");
                 if (File.Exists(galleyReq))
                 {
