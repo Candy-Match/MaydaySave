@@ -2,7 +2,7 @@ Mayday Airways 存档 Mod —— 安装说明
 =====================================
 
 作者：DeepSeek Harness 定制
-版本：5.2.0
+版本：5.2.1
 适用：Steam 版《Mayday Airways DEMO》（Unity 6.3 / IL2CPP）
 
 
@@ -18,32 +18,56 @@ Mayday Airways 存档 Mod —— 安装说明
 左上角「设置」：改打开界面的按键、开关存读档提示、行李处理方式（危险项有二次确认），
 以及一键「重置设置」。
 
-注意：读档会把烤箱/微波炉关掉（正在煮的东西不保留），避免出现"烤箱一直亮、厨房过载"的问题。
-
 联机：只有房主需要装，朋友不用装也能进。房主读档后让朋友重进一次房间最稳。
 
+注意：读档会把烤箱/微波炉关掉（正在煮的东西不保留），避免出现"烤箱一直亮、厨房过载"的问题。
 
-二、安装
---------
-1. 关闭游戏和 Steam 里的游戏进程。
+
+二、安装（普通玩家：解压即用）
+----------------------------
+1. 关闭游戏。
 2. 找到游戏目录，一般是：
       C:\SteamLibrary\steamapps\common\Mayday Airways Demo
    （Steam 里右键游戏 → 管理 → 浏览本地文件，可以直接打开）
-3. 把压缩包里的这些内容全部复制进游戏目录（覆盖同名文件）：
+3. 把压缩包里的内容全部复制进游戏目录（覆盖同名文件）：
       winhttp.dll
       doorstop_config.ini
       .doorstop_version
       dotnet\
       BepInEx\
-4. 启动游戏。
+4. 启动游戏。右下角出现“存档”按钮 = 成功。
 
 第一次启动会多等 1~3 分钟：mod 加载器要根据游戏生成本地代理程序集，
 屏幕可能短暂黑屏或卡住，这是正常的，之后每次启动都很快。
 
+压缩包里还有一个 Mods\MaydaySave\ 目录，是给 MelonLoader 用的；
+没装模组管理器时它不会被读取，放着不影响。
 
-三、卸载
+
+三、如果装了 MelonLoader 模组管理器
+---------------------------------
+游戏根目录有 version.dll 和 MelonLoader\ 就属于这种情况。
+BepInEx 和 MelonLoader 不能共存（都要初始化 dotnet\coreclr.dll），
+
+解压完压缩包后，双击根目录的「安装到模组管理器.bat」：
+  · 它会把 winhttp.dll、doorstop_config.ini、.doorstop_version、BepInEx\ 
+    收进 _旧版BepInEx_已停用\
+  · 并确认 Mods\MaydaySave\MaydaySave.dll 已就位
+然后启动游戏即可，热键 F8 照常。
+
+存档目录会变成 UserData\MaydaySave\saves（首次启动会自动从 BepInEx 目录复制过来）。
+
+想出现在「MOD 管理」列表里：管理器右上角「添加 MOD」→ 选压缩包根目录的
+MaydaySave-5.2.1.maydaymod（61 KB）。不要选 37 MB 的整个压缩包，
+管理器只接受"根目录 manifest.json + Mods/ 子目录、128 个条目以内、不含加载器文件"的包。
+
+导入后不要再保留 Mods\MaydaySave\ 那一份（同一个程序集会被加载两次）；
+再跑一次「安装到模组管理器.bat」，脚本会自动把重复的那份挪到 _重复副本_可删\。
+
+
+四、卸载
 --------
-删掉游戏目录里这些（都是 mod 加的，游戏本体文件不动）：
+普通玩家：删掉游戏目录里这些（都是 mod 加的，游戏本体文件不动）：
       winhttp.dll
       doorstop_config.ini
       .doorstop_version
@@ -51,18 +75,25 @@ Mayday Airways 存档 Mod —— 安装说明
       BepInEx\
 或者直接运行压缩包里的“卸载.ps1”。
 
+模组管理器玩家：删掉 Mods\MaydaySave\；_旧版BepInEx_已停用\ 也可以一并删。
+存档不会被删。
 
-四、存档文件在哪
+
+五、存档文件在哪
 ----------------
-      BepInEx\MaydaySave\saves\slot1.txt ... slot10.txt
+BepInEx 版：      BepInEx\MaydaySave\saves\slot1.txt ... slot10.txt
+MelonLoader 版：  UserData\MaydaySave\saves\slot1.txt ... slot10.txt
 纯文本，可以直接看、备份、发给别人。想给别人某一局，把自己的 slotN.txt 发过去即可。
 
 
-五、出问题
+六、出问题
 ----------
-日志：BepInEx\LogOutput.log，搜“Mayday Save”。
+日志：
+  BepInEx 版      -> BepInEx\LogOutput.log，搜“Mayday Save”
+  MelonLoader 版  -> MelonLoader\Latest.log，搜“Mayday Save”
 常见的几行：
   [save] slot3: ...                        保存成功，括号里是物品/系统数量
-  [load] items: live=.. saved=.. applied=..  读档时的物品对账结果
-  [load] inventory of xxx restored (n)     背包恢复
-如果游戏更新了，本 mod 可能需要重新适配（它依赖游戏内部类型名）。
+  [load] ground ...                        读档完成
+  [load] seat rows verify: ok=3            座位扩展开关已复原
+  [load] timestamps: ... clamped=...       绝对时间戳修正数量
+  [load] galley sanitized: ...             烤箱/咖啡机已复位
