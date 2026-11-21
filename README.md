@@ -3,7 +3,7 @@
 给《Mayday Airways DEMO》加一套**手动存档 / 读档**系统：游戏里随时按 **F8**（或点右下角「存档」按钮）
 打开界面，**10 个存档栏位**，想存哪个存哪个、想读哪个读哪个。
 
-- 当前版本：**v5.2.0**
+- 当前版本：**v5.2.1**
 - 运行方式：BepInEx 6（IL2CPP）插件，**不改游戏本体**，删掉即还原
 - 用途：和朋友联机时保存进度、试错、防坠机重开
 
@@ -21,15 +21,21 @@
 
 ![设置界面](screenshots/settings-panel.jpg)
 
+> 图片在压缩包的 `screenshots\` 目录里；如果你的 Markdown 阅读器不显示相对路径图片，
+> 直接打开同目录下的 `screenshots\存档界面.jpg` 或 `截图.html` 即可。
+
 ---
 
 ## 一、安装
+
+### 普通玩家（没有模组管理器）：解压即用
 
 1. 解压压缩包，把里面的东西**整个覆盖**到游戏根目录（和 `MaydayAirways.exe` 同级）：
    ```
    Mayday Airways Demo\
    ├─ winhttp.dll              （BepInEx 加载器）
    ├─ doorstop_config.ini
+   ├─ .doorstop_version
    ├─ dotnet\                  （IL2CPP 运行时）
    └─ BepInEx\
         ├─ core\               （框架本体）
@@ -39,7 +45,35 @@
    ```
 2. **首次启动慢一点**（生成适配层，约 1–3 分钟），之后秒开。
 3. 右下角出现「存档」按钮 = 安装成功。
-4. 卸载：运行根目录的 `卸载.ps1`，或直接删掉上面这些文件。
+
+> 压缩包里还会有一个 `Mods\MaydaySave\` 目录，那是给 MelonLoader 用的。
+> 没装管理器时它不会被读取，放着不影响任何东西。
+
+### 模组管理器玩家：解压后再跑一次适配脚本
+
+如果你已经装了基于 **MelonLoader** 的模组管理器（游戏根目录有 `version.dll` 和 `MelonLoader\`），
+BepInEx 与它**不能共存**（都要初始化 `dotnet\coreclr.dll`，只能有一个成功）。
+
+解压完压缩包后，双击根目录的 **`安装到模组管理器.bat`**，它会：
+
+1. 把 `winhttp.dll`、`doorstop_config.ini`、`.doorstop_version`、`BepInEx\` 收进 `_旧版BepInEx_已停用\`；
+2. 确认 `Mods\MaydaySave\`（MelonLoader 版）已就位；
+3. 之后启动游戏，热键 F8 照常，存档在 `UserData\MaydaySave\saves`。
+
+想出现在管理器列表里（可启用/关闭/删除），用管理器右上角「添加 MOD」，选压缩包**根目录**的
+`MaydaySave-5.2.1.maydaymod`（61 KB 那个小文件）。
+
+注意两点：
+
+- **不要**选 37 MB 的整个压缩包——管理器只接受"根目录有 `manifest.json` + `Mods/` 子目录"的小包，
+  它还会拒绝加载器文件和超过 128 个条目的包；
+- 管理器导入后**不要**再留一份 `Mods\MaydaySave\`，两份会在启动时加载同一个程序集。
+  适配脚本会自动检测并去掉重复的那份。
+
+### 卸载
+
+- 普通玩家：运行根目录 `卸载.ps1`
+- 管理器玩家：删掉 `Mods\MaydaySave\`；`_旧版BepInEx_已停用\` 也可以一并删
 
 ---
 
@@ -180,6 +214,8 @@ BagFallback = true
 
 | 版本 | 主要改动 |
 |---|---|
+| v5.2.1 | **解压即用**（BepInEx）；装模组管理器的玩家双击 `安装到模组管理器.bat` 自动收起冲突文件并切到 MelonLoader 版 |
+| v5.2.0-ml | 新增 **MelonLoader 版**（`.maydaymod`），可与「Mayday 模组管理器」共存；存档自动从 BepInEx 目录迁移 |
 | v5.2.0 | **修复读档后警报/提示音消失**（绝对时间戳错位 + 警报面板状态重置）；**修复读档后烤箱常亮/厨房持续过载**（烤箱、微波炉、咖啡机、热水机全部复位；过载计时清零） |
 | v5.1.0 | **游戏内设置界面**：改热键、四个开关（危险项二次确认）、重置设置 |
 | v5.0.1 | 客舱**座椅扩容**随存档恢复（修 `rowMask` 导致"已装但不生成模型"） |
@@ -238,3 +274,48 @@ BagFallback = true
 
 - `docs/安装说明.txt`：安装 / 卸载 / 快速上手
 - `docs/配置说明.txt`：四个开关的详细说明与四种玩法组合
+
+---
+
+## 十二、和模组管理器（MelonLoader）的关系
+
+### 结论
+
+本 MOD 默认是 **BepInEx** 版，压缩包解压到游戏根目录就能用。
+如果你用的是基于 **MelonLoader** 的模组管理器，用包里自带的 **`安装到模组管理器.bat`** 一键切换。
+
+### 为什么不能同时开
+
+两个加载器都要初始化 `dotnet\coreclr.dll`，**一个进程只能初始化一次**：
+
+- MelonLoader 抢到 → BepInEx 静默失败，`BepInEx\LogOutput.log` 不生成，存档 MOD 看起来"消失了"
+- 顺序反过来 → 可能直接弹 `Failed to load il2cpp`
+
+所以适配脚本做的事就是：**把会冲突的那套收起来**（移到 `_旧版BepInEx_已停用\`），让 MelonLoader 独占。
+
+### 两条路线对照
+
+| | BepInEx 版（默认） | MelonLoader 版（管理器） |
+|---|---|---|
+| 怎么装 | 解压到游戏根目录 | 解压后双击 `安装到模组管理器.bat` |
+| 模组文件 | `BepInEx\plugins\MaydaySave.dll` | `Mods\MaydaySave\MaydaySave.dll` |
+| 存档 | `BepInEx\MaydaySave\saves\` | `UserData\MaydaySave\saves\` |
+| 配置 | `BepInEx\config\com.dsh.maydaysave.cfg` | `UserData\MelonPreferences.cfg` |
+| 日志 | `BepInEx\LogOutput.log` | `MelonLoader\Latest.log` |
+
+MelonLoader 版首次启动会**自动把 BepInEx 目录里的存档复制过来**，换加载器不丢档。
+
+### 管理器能不能直接装这个大压缩包
+
+不能。管理器的包格式要求：根目录有 `manifest.json`、内容放在 `Mods/` / `Plugins/` / `UserLibs/`、
+条目不超过 128、总大小不超过 256 MiB、不能带加载器文件。我们的大包有 322 个条目、
+还带 `winhttp.dll` 和 `dotnet\`，会被直接拒收。
+
+所以压缩包里另外放了一个 61 KB 的 `MaydaySave-5.2.1.maydaymod`（根目录 + `Mods\MaydaySave\` 各一份），
+那个才是给管理器导入用的。
+
+### 想切回 BepInEx
+
+删除 `version.dll` 和 `MelonLoader\`，把 `_旧版BepInEx_已停用\` 里的东西挪回根目录即可。
+
+---
