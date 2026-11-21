@@ -147,6 +147,8 @@ namespace MaydaySave
                 if (dimmerGo != null) { UnityEngine.Object.Destroy(dimmerGo); dimmerGo = null; }
 
                 var dimmer = Mayday.UI.UIF.Dimmer(layer, 0.62f);
+                // 整体提到最上层，避免盖在存读档面板下面
+                try { host.transform.SetAsLastSibling(); } catch { }
                 dimmerGo = dimmer.gameObject;
                 var drt = dimmer.rectTransform;
                 drt.anchorMin = Vector2.zero;
@@ -273,7 +275,7 @@ namespace MaydaySave
 
             // 底部说明
             var ver = Mayday.UI.UIF.Text(proot, "Ver",
-                "MaydaySave v" + (Plugin.VersionText ?? "?") + " · 配置保存在 BepInEx\\config\\com.dsh.maydaysave.cfg",
+                "MaydaySave v" + (Plugin.VersionText ?? "?") + " · 配置保存在 " + Plugin.ConfigPathText,
                 15f, new Color(0.42f, 0.50f, 0.54f), TMPro.TextAlignmentOptions.Center, false, false);
             Place(ver.Rect, PanelW * 0.5f, 148f, PanelW - 120f, 22f, new Vector2(0.5f, 0.5f));
 
@@ -318,10 +320,10 @@ namespace MaydaySave
                 new Vector2(PanelW - 78f, y - 6f), new Vector2(1f, 0.5f));
         }
 
-        private static void SetBool(BepInEx.Configuration.ConfigEntry<bool> e, bool v)
+        private static void SetBool(ConfigEntry<bool> e, bool v)
         {
             if (e == null) return;
-            try { e.Value = v; Plugin.Logs.LogInfo($"[cfg] {e.Definition.Key} = {v}"); } catch (Exception ex) { Plugin.Logs.LogError("[cfg] set: " + ex.Message); }
+            try { e.Value = v; Plugin.Logs.LogInfo($"[cfg] {e.Key} = {v}"); } catch (Exception ex) { Plugin.Logs.LogError("[cfg] set: " + ex.Message); }
         }
 
         // ------------------------------------------------------------------
@@ -355,7 +357,7 @@ namespace MaydaySave
                     Plugin.CfgKeyCode.Value = -1;
                     GameHost.ReloadHotkey();
                 }
-                try { if (Plugin.CfgNotify != null && Plugin.CfgNotify.ConfigFile != null) Plugin.CfgNotify.ConfigFile.Save(); } catch { }
+                try { if (Plugin.CfgNotify != null) Plugin.CfgNotify.Save(); } catch { }
                 Plugin.Notify("设置已重置");
                 Plugin.Logs.LogInfo("[cfg] reset to defaults");
             }
