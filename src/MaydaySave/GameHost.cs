@@ -252,6 +252,72 @@ namespace MaydaySave
                     catch (Exception e) { Plugin.Logs.LogError("[dev] future: " + e.Message); }
                 }
 
+                var lavProbe = Path.Combine(Plugin.Root, "lav_probe.txt");
+                if (File.Exists(lavProbe))
+                {
+                    File.Delete(lavProbe);
+                    try
+                    {
+                        var lav = Mayday.Service.LavSystem.Instance;
+                        if (lav != null)
+                        {
+                            lav.NetworkSeatedPlayer = 999999u;
+                            lav.NetworkCrewInside = true;
+                            lav.NetworkLocked = true;
+                            Plugin.Logs.LogInfo($"[dev] lav injected: seated={lav.NetworkSeatedPlayer} crew={lav.NetworkCrewInside} locked={lav.NetworkLocked} occ={lav.IsOccupied}");
+                            SaveManager.SanitizeLavatory();
+                            Plugin.Logs.LogInfo($"[dev] lav after sanitize: seated={lav.NetworkSeatedPlayer} crew={lav.NetworkCrewInside} locked={lav.NetworkLocked} occ={lav.IsOccupied}");
+                        }
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] lav probe: " + e.Message); }
+                }
+
+                var lavReq = Path.Combine(Plugin.Root, "lav_stuck.txt");
+                if (File.Exists(lavReq))
+                {
+                    File.Delete(lavReq);
+                    try
+                    {
+                        var lav = Mayday.Service.LavSystem.Instance;
+                        if (lav != null)
+                        {
+                            lav.NetworkSeatedPlayer = 999999u;
+                            lav.NetworkCrewInside = true;
+                            lav.NetworkLocked = true;
+                            Plugin.Logs.LogInfo($"[dev] lav forced occupied: seated={lav.NetworkSeatedPlayer} crew={lav.NetworkCrewInside} locked={lav.NetworkLocked} isOccupied={lav.IsOccupied}");
+                        }
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] lav: " + e.Message); }
+                }
+
+                var casinoReq = Path.Combine(Plugin.Root, "casino_stuck.txt");
+                if (File.Exists(casinoReq))
+                {
+                    File.Delete(casinoReq);
+                    try
+                    {
+                        double nn = Mayday.World.WorldAuthority.Time;
+                        var casino = Mayday.Airport.Casino.Instance;
+                        if (casino != null)
+                        {
+                            var sp = casino.spin;
+                            sp.start = nn + 9999.0;
+                            casino.spin = sp;
+                            Plugin.Logs.LogInfo($"[dev] roulette start -> {sp.start:F0} (now={nn:F0})");
+                        }
+                        var all = Mayday.Airport.SlotMachine.All;
+                        if (all != null && all.Count > 0)
+                        {
+                            var sm = all[0];
+                            var ss = sm.spin;
+                            ss.start = nn + 9999.0;
+                            sm.spin = ss;
+                            Plugin.Logs.LogInfo($"[dev] slot0 start -> {ss.start:F0}");
+                        }
+                    }
+                    catch (Exception e) { Plugin.Logs.LogError("[dev] casino: " + e.Message); }
+                }
+
                 var stallReq = Path.Combine(Plugin.Root, "alarm_stall.txt");
                 if (File.Exists(stallReq))
                 {
