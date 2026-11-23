@@ -1999,6 +1999,129 @@ namespace MaydaySave
             catch (Exception e) { Plugin.Logs.LogWarning("[load] galley: " + e.Message); }
         }
 
+        /// <summary>读档后清理厕所的"占位"状态：读档后乘客/玩家重建，残留的 SeatedPlayer 会让厕所一直显示有人。</summary>
+        public static void SanitizeLavatory()
+        {
+            int seat = 0, crew = 0, unlocks = 0, resets = 0;
+            try
+            {
+                var lav = Mayday.Service.LavSystem.Instance;
+                if (lav == null) return;
+
+                double now = 0;
+                try { now = Mayday.World.WorldAuthority.Time; } catch { }
+
+                uint seated = 0;
+                try { seated = lav.NetworkSeatedPlayer; } catch { }
+                if (seated != 0 && !PlayerNetExists(seated))
+                {
+                    try { lav.NetworkSeatedPlayer = 0; seat++; } catch { }
+                }
+
+                bool crewInside = false;
+                try { crewInside = lav.NetworkCrewInside; } catch { }
+                if (crewInside)
+                {
+                    bool any = false;
+                    try { any = lav.AnyCrewInside(); } catch { any = true; }
+                    if (!any) { try { lav.NetworkCrewInside = false; crew++; } catch { } }
+                }
+
+                bool locked = false;
+                try { locked = lav.NetworkLocked; } catch { }
+                uint seatedNow = 0;
+                try { seatedNow = lav.NetworkSeatedPlayer; } catch { }
+                bool crewNow = false;
+                try { crewNow = lav.NetworkCrewInside; } catch { }
+                if (locked && seatedNow == 0 && !crewNow)
+                {
+                    try { lav.NetworkLocked = false; unlocks++; } catch { }
+                }
+
+                // 兜底：仍然判定"有人"但没有任何人，就用游戏自己的复位
+                bool occupied = false;
+                try { occupied = lav.IsOccupied; } catch { }
+                if (occupied && seatedNow == 0 && !crewNow)
+                {
+                    try { lav.ServerResetForNewRun(); resets++; } catch { }
+                }
+
+                Plugin.Logs.LogInfo($"[load] lavatory fixed: seat={seat} crew={crew} unlocks={unlocks} resets={resets}");
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[load] lavatory: " + e.Message); }
+        }
+
+        /// <summary>读档后修正赌场/老虎机的旋转动画时间戳（结构体内的绝对时间会落到未来，表现为一直转）。</summary>
+        public static void SanitizeCasino()
+        {
+            int roulette = 0, slots = 0;
+            try
+            {
+                double now = 0;
+                try { now = Mayday.World.WorldAuthority.Time; } catch { }
+                if (now <= 0) return;
+
+                var casino = Mayday.Airport.Casino.Instance;
+                if (casino != null)
+                {
+                    try
+                    {
+                        var sp = casino.spin;
+                        if (sp.start > now + 1.0)
+                        {
+                            sp.start = now - 10.0;
+                            casino.spin = sp;
+                            roulette++;
+                        }
+                    }
+                    catch { }
+                }
+
+                var all = Mayday.Airport.SlotMachine.All;
+                if (all != null)
+                {
+                    for (int i = 0; i < all.Count; i++)
+                    {
+                        var sm = all[i];
+                        if (sm == null) continue;
+                        try
+                        {
+                            var sp = sm.spin;
+                            if (sp.start > now + 1.0)
+                            {
+                                sp.start = now - 10.0;
+                                sm.spin = sp;
+                                slots++;
+                            }
+                        }
+                        catch { }
+                    }
+                }
+                Plugin.Logs.LogInfo($"[load] casino fixed: roulette={roulette} slots={slots}");
+            }
+            catch (Exception e) { Plugin.Logs.LogWarning("[load] casino: " + e.Message); }
+        }
+
+        private static bool PlayerNetExists(uint netId)
+        {
+            try
+            {
+                var arr = UnityEngine.Object.FindObjectsOfType(Il2CppType.Of<Mayday.PlayerNet>());
+                if (arr == null) return false;
+                for (int i = 0; i < arr.Length; i++)
+                {
+                    try
+                    {
+                        var p = arr[i].Cast<Mayday.PlayerNet>();
+                        if (p != null && p.netIdentity != null && p.netIdentity.netId == netId) return true;
+                    }
+                    catch { }
+                }
+            }
+            catch { }
+            return false;
+        }
+
         public static void ClearPassengers()
         {
             try
@@ -2718,6 +2841,8 @@ namespace MaydaySave
             ClampFutureTimestamps(d);
             RearmAlarms();
             SanitizeGalley();
+            SanitizeLavatory();
+            SanitizeCasino();
         }
 
         public static void ApplyExtras(SaveData d)
